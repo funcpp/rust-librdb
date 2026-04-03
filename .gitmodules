@@ -1,0 +1,3 @@
+[submodule "librdb-sys/librdb"]
+	path = librdb-sys/librdb
+	url = https://github.com/redis/librdb.git

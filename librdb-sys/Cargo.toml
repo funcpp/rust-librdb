@@ -1,0 +1,37 @@
+[package]
+name = "librdb-sys"
+version = "0.1.0+2.2.0"
+links = "librdb"
+repository = "https://github.com/funcpp/rust-librdb"
+license = "MIT"
+description = "Native bindings to the librdb library"
+keywords = ["redis"]
+categories = ["external-ffi-bindings"]
+edition = "2024"
+rust-version = "1.94"
+include = [
+    "src/**/*",
+    "build.rs",
+    "wrapper.h",
+    "librdb/api/**/*",
+    "librdb/src/lib/**/*",
+    "librdb/src/ext/extCommon.*",
+    "librdb/src/ext/handlersFilter.c",
+    "librdb/src/ext/handlersToJson.c",
+    "librdb/src/ext/handlersToPrint.c",
+    "librdb/src/ext/handlersToResp.c",
+    "librdb/src/ext/readerFile.c",
+    "librdb/src/ext/readerFileDesc.c",
+    "librdb/src/version.h",
+    "librdb/src/redisver.h",
+    "librdb/deps/redis/**/*",
+    "librdb/LICENSE",
+]
+
+[features]
+default = []
+dynamic-linking = []
+static-linking = []
+
+[build-dependencies]
+cc = "1"

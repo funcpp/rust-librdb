@@ -1,0 +1,18 @@
+[package]
+name = "librdb"
+version = "0.1.0"
+repository = "https://github.com/funcpp/rust-librdb"
+readme = "../README.md"
+license = "MIT"
+description = "Rust wrapper for librdb (Redis RDB parser)"
+keywords = ["redis"]
+categories = ["api-bindings"]
+edition = "2024"
+rust-version = "1.94"
+
+[dependencies]
+librdb-sys = { version = "0.1.0", path = "../librdb-sys" }
+thiserror = "2"
+
+[lints]
+workspace = true
