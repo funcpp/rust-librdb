@@ -643,3 +643,20 @@ fn empty_rdb() {
     assert!(events.contains(&Event::EndRdb));
     assert!(keys_of(&events).is_empty());
 }
+
+#[test]
+fn parse_fd_single_key() {
+    use std::fs::File;
+    use std::os::fd::IntoRawFd;
+
+    let file = File::open(fixture("single_key.rdb")).expect("open fixture");
+    let fd = file.into_raw_fd(); // transfer ownership to librdb
+
+    let mut parser = Parser::new(Collector::default()).expect("create parser");
+    parser.parse_fd(fd, true).expect("parse");
+    let events = parser.into_handler().events;
+
+    let keys = keys_of(&events);
+    assert_eq!(keys, vec![b"xxx"]);
+    assert!(events.contains(&Event::StringValue(b"111".to_vec())));
+}

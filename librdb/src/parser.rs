@@ -1,4 +1,4 @@
-use std::{ffi::CString, marker::PhantomData, path::Path, ptr};
+use std::{ffi::CString, marker::PhantomData, os::fd::RawFd, path::Path, ptr};
 
 use librdb_sys::{
     self, RdbHandlersDataCallbacks, RdbStatus_RDB_STATUS_ERROR, RdbStatus_RDB_STATUS_OK,
@@ -110,6 +110,35 @@ impl<H: RdbHandlers> Parser<H> {
         let reader = unsafe { librdb_sys::RDBX_createReaderFile(self.raw, c_path.as_ptr()) };
         if reader.is_null() {
             return Err(self.extract_c_error("RDBX_createReaderFile returned null"));
+        }
+
+        self.parsed = true;
+        self.run_parse()
+    }
+
+    /// Attach a file-descriptor reader and parse the RDB data.
+    ///
+    /// If `close_when_done` is true, librdb will close the fd after parsing.
+    /// The fd must be in blocking mode.
+    ///
+    /// # Errors
+    /// Returns an error if the reader cannot be created, the RDB data is
+    /// malformed, or a handler callback returns `Err`.
+    pub fn parse_fd(&mut self, fd: RawFd, close_when_done: bool) -> Result<()> {
+        if self.parsed {
+            return Err(RdbError::Parser {
+                code: 0,
+                message: "parser already used; create a new Parser instance".into(),
+            });
+        }
+
+        // SAFETY: self.raw is a valid parser in CONFIGURING state. The caller
+        // is responsible for providing a valid, blocking fd.
+        let reader = unsafe {
+            librdb_sys::RDBX_createReaderFileDesc(self.raw, fd, i32::from(close_when_done))
+        };
+        if reader.is_null() {
+            return Err(self.extract_c_error("RDBX_createReaderFileDesc returned null"));
         }
 
         self.parsed = true;
