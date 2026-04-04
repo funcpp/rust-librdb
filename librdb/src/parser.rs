@@ -1,4 +1,10 @@
-use std::{ffi::CString, marker::PhantomData, os::fd::RawFd, path::Path, ptr};
+use std::{
+    ffi::CString,
+    marker::PhantomData,
+    os::fd::{IntoRawFd, OwnedFd},
+    path::Path,
+    ptr,
+};
 
 use librdb_sys::{
     self, RdbHandlersDataCallbacks, RdbStatus_RDB_STATUS_ERROR, RdbStatus_RDB_STATUS_OK,
@@ -116,15 +122,14 @@ impl<H: RdbHandlers> Parser<H> {
         self.run_parse()
     }
 
-    /// Attach a file-descriptor reader and parse the RDB data.
+    /// Parse RDB data from a file descriptor.
     ///
-    /// If `close_when_done` is true, librdb will close the fd after parsing.
-    /// The fd must be in blocking mode.
+    /// Takes ownership of the fd. The fd must be in blocking mode.
     ///
     /// # Errors
     /// Returns an error if the reader cannot be created, the RDB data is
     /// malformed, or a handler callback returns `Err`.
-    pub fn parse_fd(&mut self, fd: RawFd, close_when_done: bool) -> Result<()> {
+    pub fn parse_fd(&mut self, fd: OwnedFd) -> Result<()> {
         if self.parsed {
             return Err(RdbError::Parser {
                 code: 0,
@@ -132,11 +137,11 @@ impl<H: RdbHandlers> Parser<H> {
             });
         }
 
-        // SAFETY: self.raw is a valid parser in CONFIGURING state. The caller
-        // is responsible for providing a valid, blocking fd.
-        let reader = unsafe {
-            librdb_sys::RDBX_createReaderFileDesc(self.raw, fd, i32::from(close_when_done))
-        };
+        // SAFETY: self.raw is a valid parser in CONFIGURING state.
+        // OwnedFd guarantees a valid fd; into_raw_fd transfers ownership to
+        // librdb which will close it (fdCloseWhenDone = 1).
+        let raw_fd = fd.into_raw_fd();
+        let reader = unsafe { librdb_sys::RDBX_createReaderFileDesc(self.raw, raw_fd, 1) };
         if reader.is_null() {
             return Err(self.extract_c_error("RDBX_createReaderFileDesc returned null"));
         }
