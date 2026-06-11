@@ -1,6 +1,6 @@
 [package]
 name = "librdb-sys"
-version = "0.1.0+2.2.0"
+version = "0.2.0+2.3.0"
 links = "librdb"
 repository = "https://github.com/funcpp/rust-librdb"
 license = "MIT"

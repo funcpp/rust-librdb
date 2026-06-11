@@ -16,6 +16,7 @@ impl RdbError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive] // RDB gains data types across versions (e.g. Array in v14); keep this open.
 pub enum DataType {
     String,
     List,
@@ -25,16 +26,19 @@ pub enum DataType {
     Module,
     Stream,
     Function,
+    /// Sparse array (RDB v14+, `RDB_TYPE_ARRAY`).
+    Array,
 }
 
 impl DataType {
     pub(crate) fn from_raw(value: i32) -> Result<Self> {
         #![allow(non_upper_case_globals)]
         use librdb_sys::{
-            RdbDataType_RDB_DATA_TYPE_FUNCTION, RdbDataType_RDB_DATA_TYPE_HASH,
-            RdbDataType_RDB_DATA_TYPE_LIST, RdbDataType_RDB_DATA_TYPE_MODULE,
-            RdbDataType_RDB_DATA_TYPE_SET, RdbDataType_RDB_DATA_TYPE_STREAM,
-            RdbDataType_RDB_DATA_TYPE_STRING, RdbDataType_RDB_DATA_TYPE_ZSET,
+            RdbDataType_RDB_DATA_TYPE_ARRAY, RdbDataType_RDB_DATA_TYPE_FUNCTION,
+            RdbDataType_RDB_DATA_TYPE_HASH, RdbDataType_RDB_DATA_TYPE_LIST,
+            RdbDataType_RDB_DATA_TYPE_MODULE, RdbDataType_RDB_DATA_TYPE_SET,
+            RdbDataType_RDB_DATA_TYPE_STREAM, RdbDataType_RDB_DATA_TYPE_STRING,
+            RdbDataType_RDB_DATA_TYPE_ZSET,
         };
         #[allow(clippy::cast_sign_loss)]
         match value as u32 {
@@ -46,6 +50,7 @@ impl DataType {
             RdbDataType_RDB_DATA_TYPE_MODULE => Ok(Self::Module),
             RdbDataType_RDB_DATA_TYPE_STREAM => Ok(Self::Stream),
             RdbDataType_RDB_DATA_TYPE_FUNCTION => Ok(Self::Function),
+            RdbDataType_RDB_DATA_TYPE_ARRAY => Ok(Self::Array),
             _ => Err(RdbError::Parser {
                 code: 0,
                 message: format!("unknown data type: {value}"),

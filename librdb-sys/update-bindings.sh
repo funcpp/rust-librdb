@@ -18,19 +18,22 @@ if ! command -v bindgen &>/dev/null; then
     exit 1
 fi
 
+# Clang args (the -I include paths) must follow `--`; bindgen derives Debug by
+# default, so only Default needs an explicit flag.
 bindgen "$WRAPPER_H" \
-    -I "$LIBRDB_ROOT/api" \
-    -I "$LIBRDB_ROOT/src" \
-    -I "$LIBRDB_ROOT/deps/redis" \
     --allowlist-function 'RDB_.*' \
     --allowlist-function 'RDBX_.*' \
     --allowlist-type 'Rdb.*' \
     --allowlist-type 'Rdbx.*' \
     --allowlist-var 'RDB_.*' \
     --allowlist-var 'RDBX_.*' \
-    --with-derive-debug \
+    --blocklist-var 'RDB_ARRAY_INSERT_IDX_NONE' \
     --with-derive-default \
-    -o "$OUTPUT"
+    -o "$OUTPUT" \
+    -- \
+    -I "$LIBRDB_ROOT/api" \
+    -I "$LIBRDB_ROOT/src" \
+    -I "$LIBRDB_ROOT/deps/redis"
 
 rustfmt "$OUTPUT"
 

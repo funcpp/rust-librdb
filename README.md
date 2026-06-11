@@ -3,8 +3,8 @@
 Rust wrapper for [librdb](https://github.com/redis/librdb), the Redis RDB file parser.
 
 Parses RDB dump files and delivers Redis data types (strings, lists, hashes,
-sets, sorted sets, streams) through a callback trait, without loading the
-entire file into memory.
+sets, sorted sets, streams, arrays, and more) through a callback trait, without
+loading the entire file into memory.
 
 | Crate | Description |
 |-------|-------------|
@@ -15,7 +15,7 @@ entire file into memory.
 
 ```toml
 [dependencies]
-librdb = "0.1"
+librdb = "0.2"
 ```
 
 By default, librdb is compiled from the vendored source (git submodule).

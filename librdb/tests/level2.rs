@@ -68,6 +68,15 @@ enum Event {
         iid: Vec<u8>,
         stream_id: StreamId,
     },
+    StreamNackZoneEntry(StreamId),
+    ArrayMetadata {
+        count: u64,
+        insert_idx: Option<u64>,
+    },
+    ArrayElement {
+        idx: u64,
+        value: Vec<u8>,
+    },
 }
 
 #[derive(Default)]
@@ -227,6 +236,24 @@ impl RdbHandlers for Collector {
         self.events.push(Event::StreamIdmpEntry {
             iid: iid.to_vec(),
             stream_id: *stream_id,
+        });
+        Ok(())
+    }
+
+    fn handle_stream_nack_zone_entry(&mut self, id: &StreamId, _items_left: i64) -> Result<()> {
+        self.events.push(Event::StreamNackZoneEntry(*id));
+        Ok(())
+    }
+
+    fn handle_array_metadata(&mut self, count: u64, insert_idx: Option<u64>) -> Result<()> {
+        self.events.push(Event::ArrayMetadata { count, insert_idx });
+        Ok(())
+    }
+
+    fn handle_array_element(&mut self, idx: u64, value: &[u8]) -> Result<()> {
+        self.events.push(Event::ArrayElement {
+            idx,
+            value: value.to_vec(),
         });
         Ok(())
     }
@@ -657,4 +684,111 @@ fn parse_fd_single_key() {
     let keys = keys_of(&events);
     assert_eq!(keys, vec![b"xxx"]);
     assert!(events.contains(&Event::StringValue(b"111".to_vec())));
+}
+
+fn array_meta(events: &[Event]) -> Vec<(u64, Option<u64>)> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            Event::ArrayMetadata { count, insert_idx } => Some((*count, *insert_idx)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn array_elements(events: &[Event]) -> Vec<(u64, &[u8])> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            Event::ArrayElement { idx, value } => Some((*idx, value.as_slice())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn array_basic_no_insert_idx() {
+    let events = parse_collect("array_v14_basic.rdb");
+
+    assert!(events.contains(&Event::NewKey {
+        key: b"arr".to_vec(),
+        data_type: DataType::Array,
+    }));
+    assert_eq!(array_meta(&events), vec![(100, None)]);
+
+    let elements = array_elements(&events);
+    assert_eq!(elements.len(), 100);
+    assert_eq!(elements[0], (0, b"a0".as_slice()));
+    assert_eq!(elements[99], (99, b"a99".as_slice()));
+    assert!(
+        elements.windows(2).all(|w| w[0].0 < w[1].0),
+        "elements must arrive in ascending idx order"
+    );
+}
+
+#[test]
+fn array_with_insert_idx() {
+    let events = parse_collect("array_v14_with_insert_idx.rdb");
+
+    assert_eq!(array_meta(&events), vec![(3, Some(49))]);
+    assert_eq!(
+        array_elements(&events),
+        vec![
+            (1_000_000, b"first".as_slice()),
+            (1_000_100, b"mid".as_slice()),
+            (1_001_000, b"third".as_slice()),
+        ]
+    );
+}
+
+#[test]
+fn array_insert_idx_boundary_is_not_sentinel() {
+    // insert_idx == u64::MAX - 1 is a real cursor value, not the
+    // RDB_ARRAY_INSERT_IDX_NONE (u64::MAX) sentinel — it must map to Some, not None.
+    let events = parse_collect("array_v14_insert_idx_boundary.rdb");
+    assert_eq!(array_meta(&events), vec![(2, Some(u64::MAX - 1))]);
+}
+
+#[test]
+fn array_mixed_value_encodings() {
+    // Int- and float-encoded elements are delivered as their textual bytes.
+    let events = parse_collect("array_v14_mixed_types.rdb");
+    let values: Vec<&[u8]> = array_elements(&events)
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect();
+    assert_eq!(
+        values,
+        vec![
+            b"this_is_a_long_sds_string_value_long_enough".as_slice(),
+            b"42".as_slice(),
+            b"1.5".as_slice(),
+            b"abc".as_slice(),
+        ]
+    );
+}
+
+#[test]
+fn stream_xnack_zone_entries() {
+    let events = parse_collect("stream_v14_xnack.rdb");
+    let nacked: Vec<StreamId> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::StreamNackZoneEntry(id) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        nacked,
+        vec![
+            StreamId {
+                ms: 1_779_170_191_998,
+                seq: 0
+            },
+            StreamId {
+                ms: 1_779_170_192_000,
+                seq: 0
+            },
+        ]
+    );
 }

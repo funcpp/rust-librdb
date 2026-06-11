@@ -321,6 +321,19 @@ pub unsafe extern "C" fn trampoline_stream_consumer_pending_entry<H: RdbHandlers
     })
 }
 
+pub unsafe extern "C" fn trampoline_stream_nack_zone_entry<H: RdbHandlers>(
+    _p: *mut RdbParser,
+    user_data: *mut c_void,
+    id: *mut RdbStreamID,
+    items_left: i64,
+) -> RdbRes {
+    let state = unsafe { &mut *(user_data.cast::<HandlerState<H>>()) };
+    guarded(state, |h| {
+        let stream_id = StreamId::from_raw(unsafe { &*id });
+        h.handle_stream_nack_zone_entry(&stream_id, items_left)
+    })
+}
+
 pub unsafe extern "C" fn trampoline_stream_idmp_meta<H: RdbHandlers>(
     _p: *mut RdbParser,
     user_data: *mut c_void,
@@ -360,6 +373,37 @@ pub unsafe extern "C" fn trampoline_stream_idmp_entry<H: RdbHandlers>(
     })
 }
 
+pub unsafe extern "C" fn trampoline_array_metadata<H: RdbHandlers>(
+    _p: *mut RdbParser,
+    user_data: *mut c_void,
+    count: u64,
+    insert_idx: u64,
+) -> RdbRes {
+    let state = unsafe { &mut *(user_data.cast::<HandlerState<H>>()) };
+    guarded(state, |h| {
+        // librdb encodes "no insert cursor" as the RDB_ARRAY_INSERT_IDX_NONE sentinel.
+        let insert_idx = if insert_idx == librdb_sys::RDB_ARRAY_INSERT_IDX_NONE {
+            None
+        } else {
+            Some(insert_idx)
+        };
+        h.handle_array_metadata(count, insert_idx)
+    })
+}
+
+pub unsafe extern "C" fn trampoline_array_element<H: RdbHandlers>(
+    p: *mut RdbParser,
+    user_data: *mut c_void,
+    idx: u64,
+    value: RdbBulk,
+) -> RdbRes {
+    let state = unsafe { &mut *(user_data.cast::<HandlerState<H>>()) };
+    guarded(state, |h| {
+        let value_slice = unsafe { bulk_to_slice(p, value) };
+        h.handle_array_element(idx, value_slice)
+    })
+}
+
 pub fn build_callbacks<H: RdbHandlers>() -> librdb_sys::RdbHandlersDataCallbacks {
     librdb_sys::RdbHandlersDataCallbacks {
         handleStartRdb: Some(trampoline_start_rdb::<H>),
@@ -383,8 +427,11 @@ pub fn build_callbacks<H: RdbHandlers>() -> librdb_sys::RdbHandlersDataCallbacks
         handleStreamCGroupPendingEntry: Some(trampoline_stream_cgroup_pending_entry::<H>),
         handleStreamNewConsumer: Some(trampoline_stream_new_consumer::<H>),
         handleStreamConsumerPendingEntry: Some(trampoline_stream_consumer_pending_entry::<H>),
+        handleStreamNackZoneEntry: Some(trampoline_stream_nack_zone_entry::<H>),
         handleStreamIdmpMeta: Some(trampoline_stream_idmp_meta::<H>),
         handleStreamIdmpProducer: Some(trampoline_stream_idmp_producer::<H>),
         handleStreamIdmpEntry: Some(trampoline_stream_idmp_entry::<H>),
+        handleArrayMetadata: Some(trampoline_array_metadata::<H>),
+        handleArrayElement: Some(trampoline_array_element::<H>),
     }
 }
