@@ -115,6 +115,12 @@ pub trait RdbHandlers {
         Ok(())
     }
 
+    /// A NACK-zone (not-yet-acknowledged) entry within a consumer group
+    /// (`RDB_TYPE_STREAM_LISTPACKS_5`, RDB v14+).
+    fn handle_stream_nack_zone_entry(&mut self, _id: &StreamId, _items_left: i64) -> Result<()> {
+        Ok(())
+    }
+
     fn handle_stream_idmp_meta(&mut self, _meta: &StreamIdmpMeta) -> Result<()> {
         Ok(())
     }
@@ -124,6 +130,20 @@ pub trait RdbHandlers {
     }
 
     fn handle_stream_idmp_entry(&mut self, _iid: &[u8], _stream_id: &StreamId) -> Result<()> {
+        Ok(())
+    }
+
+    /// Metadata for a sparse array (`RDB_TYPE_ARRAY`, RDB v14+), called once
+    /// before its elements.
+    ///
+    /// `insert_idx` is the persisted insert cursor, or `None` if the array was
+    /// saved without one (librdb's `RDB_ARRAY_INSERT_IDX_NONE` sentinel).
+    fn handle_array_metadata(&mut self, _count: u64, _insert_idx: Option<u64>) -> Result<()> {
+        Ok(())
+    }
+
+    /// A single sparse-array element, called `count` times in ascending `idx` order.
+    fn handle_array_element(&mut self, _idx: u64, _value: &[u8]) -> Result<()> {
         Ok(())
     }
 }

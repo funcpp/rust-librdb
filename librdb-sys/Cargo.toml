@@ -1,9 +1,12 @@
 [package]
 name = "librdb-sys"
-version = "0.1.0+2.2.0"
+version = "0.2.0+2.3.0"
 links = "librdb"
 repository = "https://github.com/funcpp/rust-librdb"
-license = "MIT"
+# Crate's own code is MIT; it vendors librdb (MIT) plus deps/redis sources under
+# BSD-3-Clause (Redis core), BSD-2-Clause (lzf), and Zlib (crcspeed). sha256 is
+# public-domain (no SPDX obligation). File headers are retained for attribution.
+license = "MIT AND BSD-3-Clause AND BSD-2-Clause AND Zlib"
 description = "Native bindings to the librdb library"
 keywords = ["redis"]
 categories = ["external-ffi-bindings"]

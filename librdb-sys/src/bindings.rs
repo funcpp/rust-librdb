@@ -128,6 +128,8 @@ pub const RdbRes_RDB_ERR_MAX_RAW_LEN_EXCEEDED_FOR_KEY: RdbRes = 53;
 pub const RdbRes_RDB_ERR_EXCLUSIVE_RAW_HANDLERS: RdbRes = 54;
 #[doc = " error codes - reported by parser's blocks"]
 pub const RdbRes_RDB_ERR_MODULE_INVALID_WHEN_OPCODE: RdbRes = 55;
+#[doc = " error codes - reported by parser's blocks"]
+pub const RdbRes_RDB_ERR_ARRAY_INVALID_STATE: RdbRes = 56;
 #[doc = " api-ext error codes (see file: rp-ext-api.h)"]
 pub const RdbRes__RDB_ERR_EXTENSION_FIRST: RdbRes = 4096;
 #[doc = " user-defined error codes - reported by user-defined handlers or reader"]
@@ -835,7 +837,7 @@ pub struct RdbHandlersDataCallbacks {
             serializedSize: usize,
         ) -> RdbRes,
     >,
-    #[doc = " Stream cb - invoked in this order for each stream key. Indentation represent nesting.\n   handleStreamMetadata(meta)\n   handleStreamItem(id, field, value, itemsLeft)        [repeated per entry/field]\n   handleStreamNewCGroup(grpName, meta)                 [per consumer group]\n     handleStreamCGroupPendingEntry(entry)              [per group PEL entry]\n     handleStreamNewConsumer(consName, meta)            [per consumer]\n       handleStreamConsumerPendingEntry(id)             [per consumer PEL entry]\n   handleStreamIdmpMeta(meta)                           [once, if IDMP enabled]\n     handleStreamIdmpProducer(producer)                 [per producer]\n       handleStreamIdmpEntry(entry)                     [per IID mapping]"]
+    #[doc = " Stream cb - invoked in this order for each stream key. Indentation represent nesting.\n   handleStreamMetadata(meta)\n   handleStreamItem(id, field, value, itemsLeft)        [repeated per entry/field]\n   handleStreamNewCGroup(grpName, meta)                 [per consumer group]\n     handleStreamCGroupPendingEntry(entry)              [per group PEL entry]\n     handleStreamNewConsumer(consName, meta)            [per consumer]\n       handleStreamConsumerPendingEntry(id)             [per consumer PEL entry]\n     handleStreamNackZoneEntry(id, itemsLeft)           [per NACKed entry, v14+]\n   handleStreamIdmpMeta(meta)                           [once, if IDMP enabled]\n     handleStreamIdmpProducer(producer)                 [per producer]\n       handleStreamIdmpEntry(entry)                     [per IID mapping]"]
     pub handleStreamMetadata: ::std::option::Option<
         unsafe extern "C" fn(
             p: *mut RdbParser,
@@ -883,6 +885,14 @@ pub struct RdbHandlersDataCallbacks {
             streamId: *mut RdbStreamID,
         ) -> RdbRes,
     >,
+    pub handleStreamNackZoneEntry: ::std::option::Option<
+        unsafe extern "C" fn(
+            p: *mut RdbParser,
+            userData: *mut ::std::os::raw::c_void,
+            id: *mut RdbStreamID,
+            itemsLeft: i64,
+        ) -> RdbRes,
+    >,
     pub handleStreamIdmpMeta: ::std::option::Option<
         unsafe extern "C" fn(
             p: *mut RdbParser,
@@ -904,11 +914,28 @@ pub struct RdbHandlersDataCallbacks {
             entry: *mut RdbStreamIdmpEntry,
         ) -> RdbRes,
     >,
+    #[doc = " Array cb (RDB_TYPE_ARRAY, v14+) - invoked in this order per array key:\n   handleArrayMetadata(count, insertIdx)              [once]\n   handleArrayElement(idx, value)                     [repeated count times, ascending idx]\n\n insertIdx == RDB_ARRAY_INSERT_IDX_NONE means the array was saved with no\n insert cursor. Otherwise it carries the persisted insert_idx value."]
+    pub handleArrayMetadata: ::std::option::Option<
+        unsafe extern "C" fn(
+            p: *mut RdbParser,
+            userData: *mut ::std::os::raw::c_void,
+            count: u64,
+            insertIdx: u64,
+        ) -> RdbRes,
+    >,
+    pub handleArrayElement: ::std::option::Option<
+        unsafe extern "C" fn(
+            p: *mut RdbParser,
+            userData: *mut ::std::os::raw::c_void,
+            idx: u64,
+            value: RdbBulk,
+        ) -> RdbRes,
+    >,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of RdbHandlersDataCallbacks"]
-        [::std::mem::size_of::<RdbHandlersDataCallbacks>() - 192usize];
+        [::std::mem::size_of::<RdbHandlersDataCallbacks>() - 216usize];
     ["Alignment of RdbHandlersDataCallbacks"]
         [::std::mem::align_of::<RdbHandlersDataCallbacks>() - 8usize];
     ["Offset of field: RdbHandlersDataCallbacks::handleStartRdb"]
@@ -957,12 +984,18 @@ const _: () = {
         RdbHandlersDataCallbacks,
         handleStreamConsumerPendingEntry
     ) - 160usize];
+    ["Offset of field: RdbHandlersDataCallbacks::handleStreamNackZoneEntry"]
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamNackZoneEntry) - 168usize];
     ["Offset of field: RdbHandlersDataCallbacks::handleStreamIdmpMeta"]
-        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpMeta) - 168usize];
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpMeta) - 176usize];
     ["Offset of field: RdbHandlersDataCallbacks::handleStreamIdmpProducer"]
-        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpProducer) - 176usize];
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpProducer) - 184usize];
     ["Offset of field: RdbHandlersDataCallbacks::handleStreamIdmpEntry"]
-        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpEntry) - 184usize];
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleStreamIdmpEntry) - 192usize];
+    ["Offset of field: RdbHandlersDataCallbacks::handleArrayMetadata"]
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleArrayMetadata) - 200usize];
+    ["Offset of field: RdbHandlersDataCallbacks::handleArrayElement"]
+        [::std::mem::offset_of!(RdbHandlersDataCallbacks, handleArrayElement) - 208usize];
 };
 unsafe extern "C" {
     #[doc = " Parser creation and deletion"]
@@ -1174,7 +1207,8 @@ pub const RdbDataType_RDB_DATA_TYPE_HASH: RdbDataType = 4;
 pub const RdbDataType_RDB_DATA_TYPE_MODULE: RdbDataType = 5;
 pub const RdbDataType_RDB_DATA_TYPE_STREAM: RdbDataType = 6;
 pub const RdbDataType_RDB_DATA_TYPE_FUNCTION: RdbDataType = 7;
-pub const RdbDataType_RDB_DATA_TYPE_MAX: RdbDataType = 8;
+pub const RdbDataType_RDB_DATA_TYPE_ARRAY: RdbDataType = 8;
+pub const RdbDataType_RDB_DATA_TYPE_MAX: RdbDataType = 9;
 #[doc = " Multiple levels registration\n Some of the more advanced configuration might require parsing different data\n types at different levels of the parser.\n\n The callbacks that are common to all levels (lookup HANDLERS_COMMON_CALLBACKS),\n if registered at different levels then all of them will be called, one by one,\n starting from level 0.\n\n As for the callbacks of RDB object types, each level has its own way to\n handle the data with distinct set of callbacks interfaces. In case of multiple\n levels registration, the application should configure for each RDB data type\n at what level it is needed to get parsed by calling `RDB_handleByLevel()`.\n Otherwise, the parser will resolve it by parsing and calling handlers that are\n registered at lowest level."]
 pub type RdbDataType = ::std::os::raw::c_uint;
 unsafe extern "C" {
